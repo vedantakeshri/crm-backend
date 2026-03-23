@@ -1,8 +1,6 @@
-FROM php:8.2-cli
+FROM php:8.2-cli [cite: 1]
 
 # 1. Install system dependencies
-# Added libpq-dev in case you ever switch to Postgres, 
-# but kept the mysql-client for database interactions.
 RUN apt-get update && apt-get install -y \
     git \
     unzip \
@@ -10,7 +8,7 @@ RUN apt-get update && apt-get install -y \
     libzip-dev \
     zip \
     default-mysql-client \
-    && docker-php-ext-install zip pdo pdo_mysql
+    && docker-php-ext-install zip pdo pdo_mysql 
 
 # 2. Install Composer
 COPY --from=composer:latest /usr/bin/composer /usr/bin/composer
@@ -19,20 +17,22 @@ COPY --from=composer:latest /usr/bin/composer /usr/bin/composer
 WORKDIR /app
 
 # 4. Copy project files
-COPY . .
+COPY . . [cite: 3]
 
 # 5. Install PHP dependencies
-# Optimized for production
 RUN composer install --no-interaction --no-dev --optimize-autoloader
 
 # 6. Set permissions
-# Note: 777 is a bit loose; in a strict environment, you'd use 775 
-# and change ownership to www-data, but for quick deployment, this works.
-RUN chmod -R 777 storage bootstrap/cache
+# We set ownership to the root user/group for the app, but ensure 
+# storage and cache are writable by the server.
+RUN chmod -R 777 storage bootstrap/cache [cite: 5]
 
 # 7. Expose the port
+# Render typically uses 10000, but it will inject the $PORT variable.
 EXPOSE 10000
 
-# 8. Start-up Command
-# We use a shell form here so that $PORT is correctly evaluated by the environment.
-CMD php artisan migrate --force && php -S 0.0.0.0:$PORT -t public
+# 8. Enhanced Start-up Command
+# We use 'sh -c' to ensure the shell properly handles the '&&' and environment variables.
+# This attempts migrations first, then starts the server regardless of migration success 
+# to help you see the actual application errors in the logs.
+CMD sh -c "php artisan migrate --force; php -S 0.0.0.0:\$PORT -t public"
